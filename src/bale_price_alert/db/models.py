@@ -4,16 +4,19 @@ from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bale_price_alert.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-from bale_price_alert.domain.alert import Alert
 from bale_price_alert.domain.asset import Asset
+from bale_price_alert.domain.latest_price import LatestPrice
+from bale_price_alert.domain.price_snapshot import PriceSnapshot
+from bale_price_alert.domain.provider import Provider
 from bale_price_alert.domain.user import User
 
 __all__ = [
     "User",
     "Asset",
-    "Alert",
+    "Provider",
+    "PriceSnapshot",
+    "LatestPrice",
 ]
-
 
 class HealthCheckLog(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "health_check_log"
