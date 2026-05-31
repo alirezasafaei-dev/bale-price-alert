@@ -204,6 +204,20 @@ export default {
       if (url.pathname === "/health") {
         return json({ status: "ok", service: "telegram-relay" });
       }
+      if (url.pathname === "/debug" || url.pathname === "/status") {
+        const unauthorized = requireRelaySecret(request, env);
+        if (unauthorized) return unauthorized;
+        return json({
+          status: "ok",
+          service: "telegram-relay",
+          webhook_path: "/webhook",
+          commands: ["/start", "/help", "/prices"],
+          price_source: "TGJU",
+          display_unit: "Toman",
+          source_unit: "Rial",
+          timezone: "Asia/Tehran",
+        });
+      }
       if (url.pathname === "/webhook" && request.method === "POST") {
         return handleTelegramWebhook(request, env, ctx);
       }

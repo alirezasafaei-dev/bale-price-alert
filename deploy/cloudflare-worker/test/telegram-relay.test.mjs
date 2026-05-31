@@ -26,6 +26,15 @@ try {
   assert.equal(health.status, 200);
   assert.deepEqual(await readJson(health), { status: "ok", service: "telegram-relay" });
 
+  const debug = await worker.fetch(
+    new Request("https://relay.example/debug", { headers: { "X-Relay-Secret": "expected" } }),
+    env,
+  );
+  assert.equal(debug.status, 200);
+  const debugPayload = await readJson(debug);
+  assert.equal(debugPayload.display_unit, "Toman");
+  assert.equal(debugPayload.timezone, "Asia/Tehran");
+
   const unauthorized = await worker.fetch(
     new Request("https://relay.example/send", { method: "POST" }),
     env,
