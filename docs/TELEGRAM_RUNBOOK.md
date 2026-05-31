@@ -115,3 +115,35 @@ Last verified behavior:
 - `/alert USD 170000 above`, `/alerts`, and `/delete <id>` respond from Telegram webhook.
 - Update timestamp is shown in Tehran time.
 - Worker webhook returns quickly with `queued: prices` for `/prices`.
+
+## یادداشت عملیاتی فارسی - پایداری هشدارها
+
+### وضعیت معماری فعلی
+
+- Worker مسیر اصلی production است و webhook تلگرام، `/prices`، `/alert`، `/alerts`، `/delete` و cron ده‌دقیقه‌ای را اجرا می‌کند.
+- منبع قیمت فعلی TGJU است و فعلاً migration اجباری به AlanChand یا API.ir انجام نشده است.
+- storage اگر `ALERTS_KV` bind شده باشد از KV استفاده می‌کند؛ اگر bind نباشد fallback فعلی Worker Cache است و فقط برای ادامه deploy قابل قبول است، نه persistence بلندمدت.
+
+### چک‌های بعد از deploy
+
+```bash
+set -a
+. ./.env
+set +a
+curl -fsS "$TELEGRAM_RELAY_URL/health"
+curl -fsS -H "X-Relay-Secret: $TELEGRAM_RELAY_SECRET" "$TELEGRAM_RELAY_URL/debug"
+curl -fsS -H "X-Relay-Secret: $TELEGRAM_RELAY_SECRET" "$TELEGRAM_RELAY_URL/storage-check"
+curl -fsS -H "X-Relay-Secret: $TELEGRAM_RELAY_SECRET" "$TELEGRAM_RELAY_URL/webhook-info"
+```
+
+### رفتارهای پایدارسازی اضافه‌شده
+
+- cron نتیجه آخرین اجرا را در `cron:last` ذخیره می‌کند و از `/debug` قابل بررسی است.
+- اگر قیمت یک نماد از TGJU fail شود، بقیه نمادهای سالم همچنان بررسی می‌شوند.
+- ارسال هشدار idempotency سبک دارد: برای هر alert و بازه ده‌دقیقه‌ای کلید `alert_send:*` ساخته می‌شود تا ارسال تکراری معمولی کم شود.
+- اگر ارسال تلگرام fail شود، alert به عنوان sent ثبت نمی‌شود و خطا در وضعیت آخر cron دیده می‌شود.
+- `/storage-check` فقط با relay secret کار می‌کند و بدون چاپ secret، read/write storage را تست می‌کند.
+
+### نکته مهم
+
+برای production پایدار، ساخت و bind کردن `ALERTS_KV` هنوز کار مهم بعدی است. اگر توکن Cloudflare اجازه ساخت KV نداشته باشد، باید permission مناسب اضافه شود یا namespace از dashboard ساخته شود و binding در `wrangler.toml` ثبت شود.

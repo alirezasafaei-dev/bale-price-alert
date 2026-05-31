@@ -21,6 +21,14 @@ function json(data, init = {}) {
   return Response.json(data, init);
 }
 
+function logEvent(event, details = {}) {
+  console.log(JSON.stringify({ event, ...details }));
+}
+
+function storageBackend(env) {
+  return env.ALERTS_KV ? "kv" : "cache_fallback";
+}
+
 function requireRelaySecret(request, env) {
   const expectedSecret = env.RELAY_SECRET || "";
   if (!expectedSecret) return null;
@@ -182,15 +190,24 @@ async function storageGet(env, key) {
   return response ? response.json() : null;
 }
 
-async function storagePut(env, key, value) {
+async function storagePut(env, key, value, options = {}) {
   const body = JSON.stringify(value);
   if (env.ALERTS_KV) {
-    await env.ALERTS_KV.put(key, body);
+    await env.ALERTS_KV.put(key, body, options);
     return;
   }
+  const maxAge = options.expirationTtl || 31536000;
   await caches.default.put(cacheRequest(key), new Response(body, {
-    headers: { "Cache-Control": "public, max-age=31536000", "Content-Type": "application/json" },
+    headers: { "Cache-Control": `public, max-age=${maxAge}`, "Content-Type": "application/json" },
   }));
+}
+
+async function storageDelete(env, key) {
+  if (env.ALERTS_KV) {
+    await env.ALERTS_KV.delete(key);
+    return;
+  }
+  await caches.default.delete(cacheRequest(key));
 }
 
 async function readUserAlertIds(env, chatId) {
@@ -234,6 +251,7 @@ async function createAlert(env, chatId, args) {
   await writeUserAlertIds(env, chatId, [...ids, id]);
   await writeAllAlertIds(env, [...(await readAllAlertIds(env)), id]);
   const sign = condition === "above" ? "بالاتر از" : "پایین‌تر از";
+  logEvent("alert_created", { asset_symbol: asset.symbol, condition, storage: storageBackend(env) });
   return `هشدار ساخته شد ✅\nID: ${id}\n${asset.label}: ${sign} ${new Intl.NumberFormat("fa-IR").format(targetToman)} تومان`;
 }
 
@@ -262,34 +280,111 @@ async function deleteAlert(env, chatId, args) {
     await storagePut(env, alertKey(id), alert);
   }
   await writeUserAlertIds(env, chatId, ids.filter((item) => item !== id));
+  logEvent("alert_deleted", { alert_id: id });
   return "هشدار حذف شد ✅";
 }
 
+function alertSendKey(alert, bucket) {
+  return `alert_send:${alert.id}:${bucket}`;
+}
+
+function priceBucket() {
+  return Math.floor(Date.now() / (10 * 60 * 1000));
+}
+
+async function writeCronStatus(env, status) {
+  await storagePut(env, "cron:last", status, { expirationTtl: 7 * 24 * 60 * 60 });
+}
+
 async function evaluateAlerts(env) {
-  const ids = await readAllAlertIds(env);
-  const alerts = (await Promise.all(ids.map((id) => storageGet(env, alertKey(id))))).filter(
-    (alert) => alert?.active,
-  );
-  if (alerts.length === 0) return { checked: 0, triggered: 0 };
-  const neededSymbols = [...new Set(alerts.map((alert) => alert.asset_symbol))];
-  const prices = new Map();
-  await Promise.all(neededSymbols.map(async (symbol) => {
-    const asset = TGJU_ASSETS.find((item) => item.symbol === symbol);
-    if (asset) prices.set(symbol, Math.round((await fetchTgjuPrice(asset, env)) / 10));
-  }));
-  let triggered = 0;
-  for (const alert of alerts) {
-    const current = prices.get(alert.asset_symbol);
-    if (!current) continue;
-    const matched = alert.condition === "above" ? current >= alert.target_toman : current <= alert.target_toman;
-    const last = alert.last_triggered_at ? Date.parse(alert.last_triggered_at) : 0;
-    if (!matched || Date.now() - last < 60 * 60 * 1000) continue;
-    triggered += 1;
-    alert.last_triggered_at = new Date().toISOString();
-    await storagePut(env, alertKey(alert.id), alert);
-    await sendMessage(env, { chat_id: alert.chat_id, text: `🔔 هشدار قیمت\n${alert.asset_label}: ${new Intl.NumberFormat("fa-IR").format(current)} تومان\nهدف شما: ${new Intl.NumberFormat("fa-IR").format(alert.target_toman)} تومان` });
+  const startedAt = new Date().toISOString();
+  const status = {
+    started_at: startedAt,
+    finished_at: null,
+    storage: storageBackend(env),
+    checked_count: 0,
+    triggered_count: 0,
+    failed_count: 0,
+    provider_errors: [],
+    send_errors: [],
+  };
+  try {
+    const ids = await readAllAlertIds(env);
+    const alerts = (await Promise.all(ids.map((id) => storageGet(env, alertKey(id))))).filter(
+      (alert) => alert?.active,
+    );
+    status.checked_count = alerts.length;
+    if (alerts.length === 0) {
+      status.finished_at = new Date().toISOString();
+      await writeCronStatus(env, status);
+      return status;
+    }
+    const neededSymbols = [...new Set(alerts.map((alert) => alert.asset_symbol))];
+    const prices = new Map();
+    const priceResults = await Promise.allSettled(neededSymbols.map(async (symbol) => {
+      const asset = TGJU_ASSETS.find((item) => item.symbol === symbol);
+      if (!asset) throw new Error(`asset not configured: ${symbol}`);
+      return { symbol, price: Math.round((await fetchTgjuPrice(asset, env)) / 10) };
+    }));
+    for (const result of priceResults) {
+      if (result.status === "fulfilled") {
+        prices.set(result.value.symbol, result.value.price);
+      } else {
+        status.provider_errors.push(result.reason?.message || "provider error");
+      }
+    }
+    const bucket = priceBucket();
+    for (const alert of alerts) {
+      const current = prices.get(alert.asset_symbol);
+      if (!current) continue;
+      const matched = alert.condition === "above" ? current >= alert.target_toman : current <= alert.target_toman;
+      const last = alert.last_triggered_at ? Date.parse(alert.last_triggered_at) : 0;
+      if (!matched || Date.now() - last < 60 * 60 * 1000) continue;
+      const sendKey = alertSendKey(alert, bucket);
+      if (await storageGet(env, sendKey)) continue;
+      await storagePut(env, sendKey, { created_at: new Date().toISOString() }, { expirationTtl: 2 * 60 * 60 });
+      try {
+        const { response, result } = await sendMessage(env, {
+          chat_id: alert.chat_id,
+          text: `🔔 هشدار قیمت\n${alert.asset_label}: ${new Intl.NumberFormat("fa-IR").format(current)} تومان\nهدف شما: ${new Intl.NumberFormat("fa-IR").format(alert.target_toman)} تومان`,
+        });
+        if (!response.ok || result?.ok === false) throw new Error(result?.description || `Telegram HTTP ${response.status}`);
+        status.triggered_count += 1;
+        alert.last_triggered_at = new Date().toISOString();
+        alert.last_send_status = "sent";
+        alert.last_send_error = null;
+        alert.telegram_message_id = result?.result?.message_id ? String(result.result.message_id) : null;
+        await storagePut(env, alertKey(alert.id), alert);
+      } catch (error) {
+        status.failed_count += 1;
+        status.send_errors.push(error.message || "send failed");
+        await storageDelete(env, sendKey);
+        alert.last_send_status = "failed";
+        alert.last_send_error = error.message || "send failed";
+        await storagePut(env, alertKey(alert.id), alert);
+      }
+    }
+    status.finished_at = new Date().toISOString();
+    await writeCronStatus(env, status);
+    logEvent("cron_evaluated", { checked: status.checked_count, triggered: status.triggered_count, failed: status.failed_count });
+    return status;
+  } catch (error) {
+    status.failed_count += 1;
+    status.send_errors.push(error.message || "cron failed");
+    status.finished_at = new Date().toISOString();
+    await writeCronStatus(env, status);
+    logEvent("cron_failed", { error: error.message || "cron failed" });
+    return status;
   }
-  return { checked: alerts.length, triggered };
+}
+
+async function storageCheck(env) {
+  const key = `diag:${crypto.randomUUID()}`;
+  const value = { ok: true, created_at: new Date().toISOString() };
+  await storagePut(env, key, value, { expirationTtl: 60 });
+  const readBack = await storageGet(env, key);
+  await storageDelete(env, key);
+  return { ok: readBack?.ok === true, storage: storageBackend(env) };
 }
 
 async function sendPricesLater(env, chatId) {
@@ -378,7 +473,14 @@ export default {
           display_unit: "Toman",
           source_unit: "Rial",
           timezone: "Asia/Tehran",
+          storage: storageBackend(env),
+          cron: await storageGet(env, "cron:last"),
         });
+      }
+      if (url.pathname === "/storage-check") {
+        const unauthorized = requireRelaySecret(request, env);
+        if (unauthorized) return unauthorized;
+        return json(await storageCheck(env));
       }
       if (url.pathname === "/webhook" && request.method === "POST") {
         return handleTelegramWebhook(request, env, ctx);
