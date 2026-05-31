@@ -1,247 +1,83 @@
-# bale-price-alert
+# Iran Market Price Alert
 
-Self-hostable backend for a Bale price alert bot, designed for fast MVP delivery on a single VPS with production-aware defaults.
+Self-hostable backend for an Iran-market Telegram Mini App price alert product.
 
 ## Overview
 
-`bale-price-alert` is a backend service for:
+This service provides:
 
-- registering and tracking Bale users
-- fetching asset prices from configured providers
-- storing latest market prices and historical snapshots
-- creating user-defined alert rules
-- evaluating alert conditions in background jobs
-- sending Bale notifications when alert conditions are met
-
-This project is intentionally designed as a **modular monolith** for the MVP stage.  
-The goal is to move quickly, keep deployment simple, and reuse proven backend infrastructure patterns from the existing `rubika-bot-saas` foundation where they are product-agnostic.
-
-## Why This Project Exists
-
-In a local/self-hosted environment, teams often need a lightweight alerting product that:
-
-- does not depend on foreign managed platforms
-- can run on a small VPS
-- supports messaging-based user interaction
-- keeps infrastructure simple
-- is easy to operate and extend
-
-This project solves that problem by combining:
-
-- FastAPI for HTTP APIs and webhook handling
-- PostgreSQL for durable storage
-- Redis + RQ for background processing
-- Bale as the end-user notification channel
-
-## MVP Features
-
-- Bale webhook endpoint
-- Bale user registration on `/start`
-- latest price retrieval
-- basic asset seed data
-- create/list/update/delete alert rules
-- periodic price fetching
-- periodic alert evaluation
-- Bale notification sending
-- mock provider mode
-- mock Bale mode
-- health and readiness endpoints
+- Telegram Mini App `initData` verification
+- Telegram user persistence
+- Iran-market price fetching with Nerkh free-key provider, TGJU no-key scraping fallback, AlanChand, API.ir, and Bonbast failover
+- latest price and optional snapshot storage
+- alert CRUD for Telegram users
+- 60-second background price fetch and alert evaluation
+- Telegram Bot API notifications
 
 ## Stack
 
-- Python 3.12
+- Python 3.10+
 - FastAPI
-- SQLAlchemy 2.x
+- SQLAlchemy 2.x async
 - Alembic
-- PostgreSQL
-- Redis
-- RQ
-- Pydantic v2
-- pydantic-settings
-- httpx
-- pytest
-- Ruff
-- MyPy
-- Docker / Docker Compose
+- PostgreSQL in production, SQLite for tests/local fallback
+- Redis-compatible cache settings
+- httpx, Pydantic v2, pydantic-settings
+- pytest, Ruff, MyPy
 
-## Architecture Summary
-
-The system is a modular monolith with clear internal boundaries:
-
-- `api`: HTTP endpoints and webhook entrypoints
-- `services`: business logic
-- `repositories`: database access
-- `models`: persistence models
-- `integrations`: Bale + price providers
-- `workers`: background jobs for prices, alert evaluation, notifications
-- `db/core`: shared infrastructure
-
-The project intentionally reuses the architectural direction already established in `rubika-bot-saas`:
-
-- versioned API
-- environment-based config
-- PostgreSQL + SQLAlchemy + Alembic
-- Redis + RQ
-- centralized operational concerns
-- production-aware MVP defaults
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/REUSE_PLAN.md](docs/REUSE_PLAN.md).
-
-## Repository Structure
-
-```text
-bale-price-alert/
-├── app/
-│   ├── api/
-│   ├── core/
-│   ├── db/
-│   ├── integrations/
-│   ├── models/
-│   ├── repositories/
-│   ├── schemas/
-│   ├── services/
-│   ├── workers/
-│   ├── seed/
-│   └── main.py
-├── alembic/
-├── docs/
-├── scripts/
-├── tests/
-├── .env.example
-├── alembic.ini
-├── docker-compose.yml
-├── Dockerfile
-├── Makefile
-├── openapi.yaml
-├── pyproject.toml
-└── README.md
-
-```
 ## Quick Start
 
-### 1. Configure environment
-
-bash
+```bash
 cp .env.example .env
+uv sync
+uv run alembic upgrade head
+uv run python -m novax_price_alert.scripts.seed_mvp
+uv run uvicorn novax_price_alert.api.main:app --host 127.0.0.1 --port 8000
+```
 
-Update values in `.env` as needed.
+Worker:
 
-### 2. Start infrastructure
+```bash
+uv run python -m novax_price_alert.worker_main
+```
 
-bash
-docker compose up -d postgres redis
+## MVP Assets
 
-### 3. Run migrations
+- `USD_IRT` — دلار آزاد
+- `GOLD_18K_IRT` — طلای ۱۸ عیار
+- `SEKKEH_EMAMI_IRT` — سکه امامی
+- `USDT_IRT` — تتر
 
-bash
-make migrate
+All displayed user prices are Iran-market prices. Global market APIs are not primary sources.
 
-### 4. Seed initial assets
+## API Auth
 
-bash
-make seed-assets
+TWA-authenticated routes require:
 
-### 5. Start the API
+```text
+X-Telegram-Init-Data: <Telegram.WebApp.initData>
+```
 
-bash
-make dev
+The backend validates the Telegram hash using `TELEGRAM_BOT_TOKEN`, checks freshness, and upserts the user.
 
-### 6. Start the worker
+## Quality
 
-bash
-make worker
+```bash
+uv run pytest
+uv run ruff check .
+uv run mypy src
+```
 
-## Environment Overview
+## Data Source Order
 
-Expected environment categories:
+1. Nerkh API when `NERKH_API_KEY` is configured
+2. TGJU no-key HTML fallback with conservative scraping and caching
+3. AlanChand API when `ALANCHAND_API_TOKEN` is configured
+4. API.ir when account endpoint/key are configured
+5. Bonbast failover only
 
-- app/runtime config
-- PostgreSQL connection
-- Redis connection
-- Bale integration settings
-- provider settings
-- secrets/security settings
+Provider values are normalized to internal `IRT` asset symbols before persistence and alert matching.
 
-See:
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- [docs/OPERATIONS.md](docs/OPERATIONS.md)
+Nerkh advertises free access, but its official OpenAPI currently requires `x-api-key` or Bearer auth for price endpoints. No API key is hardcoded in this repository.
 
-## Docker Usage
-
-Typical local startup:
-
-bash
-docker compose up --build
-
-Expected services:
-
-- `api`
-- `worker`
-- `postgres`
-- `redis`
-
-Optional:
-- `scheduler`
-
-## Migrations
-
-Alembic is used from the beginning.
-
-Typical commands:
-
-bash
-make makemigrations
-make migrate
-
-## Seed Flow
-
-The project includes an asset seed process for initial supported assets:
-
-- USDT
-- USD
-- EUR
-- BTC
-- ETH
-- GOLD18
-- EMAMI_COIN
-
-bash
-make seed-assets
-
-## Worker Flow
-
-Background jobs cover:
-
-- price fetching
-- alert evaluation
-- notification sending
-
-See [docs/JOBS_AND_WORKERS.md](docs/JOBS_AND_WORKERS.md).
-
-## Tests
-
-Typical test run:
-
-bash
-make test
-
-Minimum MVP test coverage should include:
-
-- health/readiness
-- latest prices endpoint
-- alert creation
-- webhook `/start` flow
-
-## Documentation
-
-- [docs/PRODUCT_SCOPE.md](docs/PRODUCT_SCOPE.md)
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md)
-- [docs/API.md](docs/API.md)
-- [docs/BOT_BEHAVIOR.md](docs/BOT_BEHAVIOR.md)
-- [docs/JOBS_AND_WORKERS.md](docs/JOBS_AND_WORKERS.md)
-- [docs/PROVIDERS.md](docs/PROVIDERS.md)
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- [docs/OPERATIONS.md](docs/OPERATIONS.md)
-- [docs/ROADMAP.md](docs/ROADMAP.md)
-- [docs/REUSE_PLAN.md](docs/REUSE_PLAN.md)
+TGJU scraping is used only as a no-key resilience layer and should be cached aggressively to reduce request volume.

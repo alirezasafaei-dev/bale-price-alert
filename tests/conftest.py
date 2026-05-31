@@ -3,7 +3,7 @@ from typing import AsyncGenerator
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from bale_price_alert.db.base import Base
+from novax_price_alert.db.base import Base
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 

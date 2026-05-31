@@ -3,10 +3,10 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bale-price-alert"
+name = "novax-price-alert"
 version = "0.1.0"
-description = "Bale-based price alert backend"
-requires-python = ">=3.12"
+description = "Novax Iran-market Telegram price alert backend"
+requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.111",
     "uvicorn>=0.30",
@@ -14,6 +14,9 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.2",
     "aiosqlite>=0.22.1",
+    "asyncpg>=0.30",
+    "httpx>=0.28",
+    "redis>=5.2",
 ]
 
 [project.optional-dependencies]
@@ -26,7 +29,7 @@ dev = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py310"
 exclude = ["migrations"]
 
 [tool.ruff.lint]
@@ -34,7 +37,7 @@ select = ["E", "F", "I", "B"]
 ignore = ["B008"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.10"
 strict = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -54,4 +57,3 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
-

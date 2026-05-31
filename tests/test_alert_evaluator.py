@@ -1,13 +1,13 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bale_price_alert.domain.alert_rule import AlertRule
-from bale_price_alert.domain.enums import AlertCondition
-from bale_price_alert.domain.latest_price import LatestPrice
-from bale_price_alert.services.alert_evaluator import AlertEvaluatorService
+from novax_price_alert.domain.alert_rule import AlertRule
+from novax_price_alert.domain.enums import AlertCondition
+from novax_price_alert.domain.latest_price import LatestPrice
+from novax_price_alert.services.alert_evaluator import AlertEvaluatorService
 
 
 @pytest.mark.anyio
@@ -16,7 +16,7 @@ async def test_evaluator_does_not_duplicate_event_for_same_timestamp(
 ) -> None:
     session = db_session
 
-    observed_at = datetime.now(UTC)
+    observed_at = datetime.now(timezone.utc)
 
     latest = LatestPrice(
         asset_id="asset-1",

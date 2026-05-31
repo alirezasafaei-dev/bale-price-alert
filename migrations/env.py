@@ -14,9 +14,9 @@ SRC_PATH = os.path.join(PROJECT_ROOT, "src")
 sys.path.insert(0, SRC_PATH)
 
 # ---- project imports ----
-import bale_price_alert.db.models  # noqa: E402,F401
-from bale_price_alert.core.settings import settings  # noqa: E402
-from bale_price_alert.db.base import Base  # noqa: E402
+import novax_price_alert.db.models  # noqa: E402,F401
+from novax_price_alert.core.settings import settings  # noqa: E402
+from novax_price_alert.db.base import Base  # noqa: E402
 
 # ---- alembic config ----
 config = context.config

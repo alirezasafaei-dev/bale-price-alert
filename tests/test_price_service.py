@@ -1,13 +1,16 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bale_price_alert.application.services.price_service import PriceService
-from bale_price_alert.domain.latest_price import LatestPrice
-from bale_price_alert.infra.providers.base import PricePoint
+from novax_price_alert.application.services.price_query_service import PriceQueryService
+from novax_price_alert.application.services.price_service import PriceService
+from novax_price_alert.domain.asset import Asset
+from novax_price_alert.domain.latest_price import LatestPrice
+from novax_price_alert.domain.provider import Provider
+from novax_price_alert.infra.providers.base import PricePoint
 
 
 @pytest.mark.anyio
@@ -22,7 +25,7 @@ async def test_save_price_updates_latest(db_session: AsyncSession) -> None:
     pp = PricePoint(
         symbol="BTC",
         price=Decimal("50000.00"),
-        observed_at=datetime.now(UTC),
+        observed_at=datetime.now(timezone.utc),
     )
 
     await service.save_price(test_asset_id, test_provider_id, pp)
@@ -32,3 +35,24 @@ async def test_save_price_updates_latest(db_session: AsyncSession) -> None:
     latest = res.scalar_one()
 
     assert latest.price == Decimal("50000.00")
+
+
+@pytest.mark.anyio
+async def test_latest_prices_returns_provider_slug(db_session: AsyncSession) -> None:
+    session = db_session
+    observed_at = datetime.now(timezone.utc)
+    asset = Asset(id="asset-1", symbol="USD_IRT", name="US Dollar")
+    provider = Provider(id="provider-1", slug="tgju_scrape", name="TGJU Scrape", priority=8)
+    latest = LatestPrice(
+        asset_id=asset.id,
+        provider_id=provider.id,
+        price=Decimal("1704850"),
+        observed_at=observed_at,
+    )
+    session.add_all([asset, provider, latest])
+    await session.commit()
+
+    rows = await PriceQueryService(session).latest_prices("USD_IRT")
+
+    assert len(rows) == 1
+    assert rows[0].provider_slug == "tgju_scrape"

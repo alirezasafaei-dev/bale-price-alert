@@ -1,0 +1,13 @@
+{
+  "name": "novax-telegram-relay-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/telegram-relay.test.mjs",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
