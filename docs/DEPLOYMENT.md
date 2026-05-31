@@ -110,6 +110,9 @@ The smoke script runs migrations, seeds MVP assets, fetches real prices through 
 
 ## Production Verification
 
+For Telegram-specific checks, use `docs/TELEGRAM_RUNBOOK.md`.
+
+
 After deploy:
 
 ```bash

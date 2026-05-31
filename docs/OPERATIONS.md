@@ -87,6 +87,24 @@ npx wrangler secret put TELEGRAM_BOT_TOKEN
 npx wrangler secret put RELAY_SECRET
 ```
 
+
+## Current Telegram Production State
+
+See `docs/TELEGRAM_RUNBOOK.md` for the live Telegram bot runbook.
+
+Current verified public endpoints:
+
+- Cloudflare Worker: `https://novax-telegram-relay.asdevelooper.workers.dev`
+- Telegram webhook: `https://novax-telegram-relay.asdevelooper.workers.dev/webhook`
+
+Current verified bot commands:
+
+- `/start`
+- `/help`
+- `/prices`
+
+`/prices` displays TGJU prices as Toman and formats update time in `Asia/Tehran`.
+
 ## Monitoring
 
 Minimum checks:
