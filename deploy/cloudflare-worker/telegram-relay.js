@@ -387,6 +387,15 @@ async function storageCheck(env) {
   return { ok: readBack?.ok === true, storage: storageBackend(env) };
 }
 
+async function cronStatus(env) {
+  return {
+    ok: true,
+    storage: storageBackend(env),
+    cron_present: Boolean(await storageGet(env, "cron:last")),
+    cron: await storageGet(env, "cron:last"),
+  };
+}
+
 async function sendPricesLater(env, chatId) {
   try {
     const reply = await buildPricesText(env);
@@ -481,6 +490,16 @@ export default {
         const unauthorized = requireRelaySecret(request, env);
         if (unauthorized) return unauthorized;
         return json(await storageCheck(env));
+      }
+      if (url.pathname === "/cron-status") {
+        const unauthorized = requireRelaySecret(request, env);
+        if (unauthorized) return unauthorized;
+        return json(await cronStatus(env));
+      }
+      if (url.pathname === "/run-cron" && request.method === "POST") {
+        const unauthorized = requireRelaySecret(request, env);
+        if (unauthorized) return unauthorized;
+        return json(await evaluateAlerts(env));
       }
       if (url.pathname === "/webhook" && request.method === "POST") {
         return handleTelegramWebhook(request, env, ctx);

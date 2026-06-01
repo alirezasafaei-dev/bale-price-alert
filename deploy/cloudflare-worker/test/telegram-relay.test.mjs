@@ -185,6 +185,25 @@ try {
   assert.equal(cronDebugPayload.cron.checked_count, 1);
   assert.equal(cronDebugPayload.cron.triggered_count, 0);
 
+  const cronStatus = await worker.fetch(
+    new Request("https://relay.example/cron-status", { headers: { "X-Relay-Secret": "expected" } }),
+    env,
+  );
+  assert.equal(cronStatus.status, 200);
+  const cronStatusPayload = await readJson(cronStatus);
+  assert.equal(cronStatusPayload.cron_present, true);
+  assert.equal(cronStatusPayload.cron.checked_count, 1);
+
+  const manualCron = await worker.fetch(
+    new Request("https://relay.example/run-cron", {
+      method: "POST",
+      headers: { "X-Relay-Secret": "expected" },
+    }),
+    env,
+  );
+  assert.equal(manualCron.status, 200);
+  assert.equal((await readJson(manualCron)).checked_count, 1);
+
   const partialFailureEnv = { RELAY_SECRET: "expected", TELEGRAM_BOT_TOKEN: "token", ALERTS_KV: createKv(), TGJU_BASE_URL: "https://partial.example" };
   await worker.fetch(
     new Request("https://relay.example/webhook", {

@@ -122,7 +122,7 @@ Last verified behavior:
 
 - Worker مسیر اصلی production است و webhook تلگرام، `/prices`، `/alert`، `/alerts`، `/delete` و cron ده‌دقیقه‌ای را اجرا می‌کند.
 - منبع قیمت فعلی TGJU است و فعلاً migration اجباری به AlanChand یا API.ir انجام نشده است.
-- storage اگر `ALERTS_KV` bind شده باشد از KV استفاده می‌کند؛ اگر bind نباشد fallback فعلی Worker Cache است و فقط برای ادامه deploy قابل قبول است، نه persistence بلندمدت.
+- storage فعلی production با binding `ALERTS_KV` روی Cloudflare KV است.
 
 ### چک‌های بعد از deploy
 
@@ -134,6 +134,14 @@ curl -fsS "$TELEGRAM_RELAY_URL/health"
 curl -fsS -H "X-Relay-Secret: $TELEGRAM_RELAY_SECRET" "$TELEGRAM_RELAY_URL/debug"
 curl -fsS -H "X-Relay-Secret: $TELEGRAM_RELAY_SECRET" "$TELEGRAM_RELAY_URL/storage-check"
 curl -fsS -H "X-Relay-Secret: $TELEGRAM_RELAY_SECRET" "$TELEGRAM_RELAY_URL/webhook-info"
+curl -fsS -H "X-Relay-Secret: $TELEGRAM_RELAY_SECRET" "$TELEGRAM_RELAY_URL/cron-status"
+```
+
+اگر `cron_present` false بود یا نیاز به تست فوری بدون انتظار cron ده‌دقیقه‌ای داشتی:
+
+```bash
+curl -fsS -X POST -H "X-Relay-Secret: $TELEGRAM_RELAY_SECRET" "$TELEGRAM_RELAY_URL/run-cron"
+curl -fsS -H "X-Relay-Secret: $TELEGRAM_RELAY_SECRET" "$TELEGRAM_RELAY_URL/cron-status"
 ```
 
 ### رفتارهای پایدارسازی اضافه‌شده
@@ -143,7 +151,8 @@ curl -fsS -H "X-Relay-Secret: $TELEGRAM_RELAY_SECRET" "$TELEGRAM_RELAY_URL/webho
 - ارسال هشدار idempotency سبک دارد: برای هر alert و بازه ده‌دقیقه‌ای کلید `alert_send:*` ساخته می‌شود تا ارسال تکراری معمولی کم شود.
 - اگر ارسال تلگرام fail شود، alert به عنوان sent ثبت نمی‌شود و خطا در وضعیت آخر cron دیده می‌شود.
 - `/storage-check` فقط با relay secret کار می‌کند و بدون چاپ secret، read/write storage را تست می‌کند.
+- `/cron-status` آخرین `cron:last` را امن نشان می‌دهد و `/run-cron` فقط با POST و relay secret یک اجرای دستی انجام می‌دهد.
 
 ### نکته مهم
 
-برای production پایدار، ساخت و bind کردن `ALERTS_KV` هنوز کار مهم بعدی است. اگر توکن Cloudflare اجازه ساخت KV نداشته باشد، باید permission مناسب اضافه شود یا namespace از dashboard ساخته شود و binding در `wrangler.toml` ثبت شود.
+برای production پایدار، قبل از هر تغییر مطمئن شو `/debug` مقدار `storage: kv` و `/storage-check` مقدار `ok: true` برمی‌گرداند.
