@@ -116,6 +116,32 @@ try {
   assert.match(pricesPayload.text, /وقت تهران/);
   assert.doesNotMatch(pricesPayload.text, /UTC/);
 
+  const alertGuide = await worker.fetch(
+    new Request("https://relay.example/webhook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: { chat: { id: 123 }, text: "/alert" } }),
+    }),
+    env,
+  );
+  assert.equal(alertGuide.status, 200);
+  const alertGuidePayload = JSON.parse(telegramRequests.at(-1).init.body);
+  assert.match(alertGuidePayload.text, /برای ساخت هشدار/);
+  assert.match(alertGuidePayload.text, /\/alert USD 170000 above/);
+  assert.match(alertGuidePayload.text, /\/alert USDT 175000 below/);
+
+  const malformedAlert = await worker.fetch(
+    new Request("https://relay.example/webhook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: { chat: { id: 123 }, text: "/alert USD above 170000" } }),
+    }),
+    env,
+  );
+  assert.equal(malformedAlert.status, 200);
+  const malformedAlertPayload = JSON.parse(telegramRequests.at(-1).init.body);
+  assert.match(malformedAlertPayload.text, /فرمت هشدار درست نیست/);
+  assert.match(malformedAlertPayload.text, /برای ساخت هشدار/);
 
   const createAlert = await worker.fetch(
     new Request("https://relay.example/webhook", {

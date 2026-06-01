@@ -17,6 +17,19 @@ const TGJU_ASSETS = [
   { symbol: "USDT_IRT", aliases: ["USDT", "TETHER"], label: "تتر", path: "/", usdt: true },
 ];
 
+const ALERT_GUIDE_TEXT = `برای ساخت هشدار، دستور را کامل در یک پیام بفرست:
+/alert USD 170000 above
+
+نمونه‌ها:
+/alert USD 170000 above
+/alert USDT 175000 below
+/alert GOLD 18000000 above
+/alert SEKKEH 180000000 below
+
+نمادها: USD, USDT, GOLD, SEKKEH
+شرط‌ها: above یعنی بالاتر از هدف، below یعنی پایین‌تر از هدف
+عدد هدف را به تومان وارد کن.`;
+
 function json(data, init = {}) {
   return Response.json(data, init);
 }
@@ -241,12 +254,15 @@ async function writeAllAlertIds(env, ids) {
 }
 
 async function createAlert(env, chatId, args) {
+  if (args.length === 0) {
+    return ALERT_GUIDE_TEXT;
+  }
   const [assetInput, targetInput, conditionInput] = args;
   const asset = normalizeAsset(assetInput);
   const targetToman = parseToman(targetInput);
   const condition = normalizeCondition(conditionInput);
   if (!asset || !targetToman || !condition) {
-    return "فرمت هشدار درست نیست. نمونه:\n/alert USD 170000 above\nنمادها: USD, USDT, GOLD, SEKKEH\nشرط‌ها: above یا below";
+    return `فرمت هشدار درست نیست.\n\n${ALERT_GUIDE_TEXT}`;
   }
   const id = makeAlertId();
   const alert = {
