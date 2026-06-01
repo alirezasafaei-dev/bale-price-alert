@@ -130,6 +130,27 @@ try {
   assert.match(createAlertPayload.text, /هشدار ساخته شد/);
   const alertId = createAlertPayload.text.match(/ID: (?<id>[a-f0-9]+)/).groups.id;
 
+  const createPersianAlert = await worker.fetch(
+    new Request("https://relay.example/webhook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: { chat: { id: 123 }, text: "/alert@novax_price_bot USD ۱۷۰,۰۰۰ above" } }),
+    }),
+    env,
+  );
+  assert.equal(createPersianAlert.status, 200);
+  const createPersianAlertPayload = JSON.parse(telegramRequests.at(-1).init.body);
+  assert.match(createPersianAlertPayload.text, /هشدار ساخته شد/);
+  const persianAlertId = createPersianAlertPayload.text.match(/ID: (?<id>[a-f0-9]+)/).groups.id;
+  await worker.fetch(
+    new Request("https://relay.example/webhook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: { chat: { id: 123 }, text: `/delete ${persianAlertId}` } }),
+    }),
+    env,
+  );
+
   const listAlerts = await worker.fetch(
     new Request("https://relay.example/webhook", {
       method: "POST",

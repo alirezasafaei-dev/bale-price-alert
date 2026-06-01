@@ -162,10 +162,24 @@ function normalizeCondition(input) {
   return null;
 }
 
+function normalizeDigits(input) {
+  const persianDigits = "۰۱۲۳۴۵۶۷۸۹";
+  const arabicDigits = "٠١٢٣٤٥٦٧٨٩";
+  return String(input || "").replace(/[۰-۹٠-٩]/g, (digit) => {
+    const persianIndex = persianDigits.indexOf(digit);
+    if (persianIndex >= 0) return String(persianIndex);
+    return String(arabicDigits.indexOf(digit));
+  });
+}
+
 function parseToman(input) {
-  const value = Number(String(input || "").replaceAll(",", ""));
+  const value = Number(normalizeDigits(input).replace(/[,\s٬،]/g, ""));
   if (!Number.isFinite(value) || value <= 0) return null;
   return Math.round(value);
+}
+
+function normalizeCommand(input) {
+  return String(input || "").trim().toLowerCase().split("@")[0];
 }
 
 function alertKey(id) {
@@ -416,7 +430,7 @@ async function handleTelegramWebhook(request, env, ctx) {
   const text = getMessageText(update).trim();
   let reply = HELP_TEXT;
   const [command, ...args] = text.split(/\s+/);
-  const normalizedCommand = command.toLowerCase();
+  const normalizedCommand = normalizeCommand(command);
   if (normalizedCommand === "/prices") {
     await sendMessage(env, { chat_id: chatId, text: "⏳ در حال دریافت قیمت‌های لحظه‌ای..." });
     if (ctx?.waitUntil) {
