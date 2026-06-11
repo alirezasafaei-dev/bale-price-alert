@@ -9,6 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from novax_price_alert.api.deps import get_db
+from novax_price_alert.api.i18n import (
+    AUTH_ADMIN_TOKEN_REQUIRED,
+)
 from novax_price_alert.api.schemas.price import (
     LatestPriceItemOut,
     LatestPricesOut,
@@ -140,7 +143,7 @@ async def test_override_price(
     if not auth_token:
         raise HTTPException(
             status_code=401,
-            detail="توکن مدیریت الزامی است. هدر Authorization یا پارامتر ?token= را ارسال کنید.",
+            detail=AUTH_ADMIN_TOKEN_REQUIRED,
         )
 
     # Strip Bearer prefix if present
