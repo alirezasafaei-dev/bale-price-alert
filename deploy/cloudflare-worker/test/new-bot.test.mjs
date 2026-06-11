@@ -80,9 +80,6 @@ global.fetch = async (url, options) => {
   }
 
   if (hostname === "api.coingecko.com") {
-    if (providerMode === "crypto-unavailable") {
-      return { ok: false, json: async () => ({}) };
-    }
     return {
       ok: true,
       json: async () => ({
